@@ -8,6 +8,8 @@ from bs4 import BeautifulSoup
 from symspellpy import SymSpell, Verbosity
 import string
 import pkg_resources
+from emot import EMOTICONS_EMO
+from emot import UNICODE_EMOJI
 
 """
 Contém funções úteis para pré-processamento de texto.
@@ -58,6 +60,33 @@ def remove_html(text):
     Remove tags HTML do texto
     """
     return BeautifulSoup(text, "html.parser").get_text()
+
+
+def contains_emoji_or_emoticon(text):
+    """
+    Returns True if the given text contains any emoji or emoticon
+    recognized by the `emot` library.
+    """
+    # Check for emojis
+    for emoji in UNICODE_EMOJI.keys():
+        if emoji in text:
+            return True
+
+    # Check for emoticons
+    for emoticon in EMOTICONS_EMO.keys():
+        if emoticon in text:
+            return True
+
+    return False
+
+
+def filter_text_with_emoji(corpus):
+    """
+    Given a corpus (list of text entries), return only those
+    that contain emojis or emoticons.
+    """
+    return [entry for entry in corpus if contains_emoji_or_emoticon(entry)]
+
 
 def remove_special_characters(text):
     """
@@ -113,6 +142,8 @@ def handle_typos(text, sym_spell):
 
     return " ".join(corrected_words)
 
+
+
 if __name__ == "__main__":
     text =     """
             This text has      extra spaces, <br> HTML </br>, 
@@ -120,7 +151,7 @@ if __name__ == "__main__":
             Testing lemmatization: running, ran, easily farther and further.    
             Tseting typos: teh, recieve, adress, charcter.
             """
-    nlp = en_core_web_sm.load()
+    nlp = load_nlp()
 
     sym_spell = build_symspell()
 

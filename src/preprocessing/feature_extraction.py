@@ -11,3 +11,5 @@ def add_features(df, input_column='text'):
     dataframe['mean_word_length'] = df[input_column].map(lambda rev: np.mean([len(word) for word in rev.split()]))
     
     return dataframe
+
+

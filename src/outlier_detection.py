@@ -91,7 +91,7 @@ def compare_outlier_methods(series, method_names=None):
              que marca pontos detectados por 2+ métodos.
     """
     methods = {
-        'zscore': lambda s: zscore_outliers(s, threshold=2.5)[1],
+        'zscore': lambda s: zscore_outliers(s, threshold=3)[1],
         'iqr': lambda s: iqr_outliers(s, multiplier=1.5)[1],
         'isolation_forest': lambda s: isolation_forest_outliers(s, contamination=0.05)[1],
         'lof': lambda s: local_outlier_factor_outliers(s, contamination=0.05)[1],

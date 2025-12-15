@@ -194,6 +194,17 @@ if __name__ == "__main__":
     #plot_text_length_distribution(df_clean['word_count'], msg='Contagem de Palavras')
     #plot_text_length_distribution(df_clean['mean_word_length'], msg='Comprimento Médio das Palavras')
 
+    print("Assimetria comprimento: {}".format(df_clean['length'].skew())) 
+    print("Curtose comprimento: {}".format(df_clean['length'].kurtosis()))
+
+    print("Assimetria contagem de palavras: {}".format(df_clean['word_count'].skew())) 
+    print("Curtose contagemm de palavras: {}".format(df_clean['word_count'].kurtosis()))
+
+    print("Assimetria comprimento médio de palavras: {}".format(df_clean['mean_word_length'].skew())) 
+    print("Curtose comprimento médio de palavras: {}".format(df_clean['mean_word_length'].kurtosis()))
+
+    
+
     #print(df_clean.nlargest(5,['mean_word_length']))
     #print(df_clean.nsmallest(5, ['mean_word_length']))
 
@@ -234,7 +245,17 @@ if __name__ == "__main__":
     consensus_count = comparison['consensus'].sum()
     print(f"Pontos acusados por 2+ métodos: {consensus_count}")
     outlier_rows = df_clean[comparison['consensus']]
-    outlier_rows.to_csv('data/analysis/outliers.csv', index=False)
+    outlier_rows.to_csv('data/analysis/outliers_length.csv', index=False)
+    
+    print("\n=== Comparando métodos para 'word_count' ===")
+    comparison = od.compare_outlier_methods(df_clean['word_count'])
+    consensus_count = comparison['consensus'].sum()
+    print(f"Pontos acusados por 2+ métodos: {consensus_count}")
+    outlier_rows = df_clean[comparison['consensus']]
+    outlier_rows.to_csv('data/analysis/outliers_word_count.csv', index=False)
+
+    
+
     nlp = load_nlp()
 
     plot_top_ngrams(no_stopwords, ngram_range=(1,1), title="Top 10 Unigrams")

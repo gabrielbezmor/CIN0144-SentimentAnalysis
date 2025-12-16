@@ -2,11 +2,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from preprocessing.clean_dataset import remove_duplicates
-from preprocessing.clean_text import remove_stopwords, tokenize, load_nlp, normalize_whitespace, remove_special_characters, filter_text_with_emoji
-from preprocessing.feature_extraction import add_features
+from preprocessing.clean_text import remove_stopwords, tokenize, load_nlp, normalize_whitespace, remove_html, clean_text_pipeline, customize_stopwords
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.model_selection import train_test_split
+from preprocessing.feature_extraction import add_features
 import outlier_detection as od
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.manifold import TSNE
+import plotly.express as px
 """
 EDA - Análise Exploratória de Dados
 Inspiração: https://medium.com/dscier/eda-nlp-fe483c6871ba
@@ -24,8 +27,18 @@ def eda_summary(dataframe):
     summary['duplicate_rows'] = dataframe.duplicated().sum()
     return summary
 
+def generate_wordcloud(text):
+    """
+    Gera wordcloud a partir de string
+    """
+    wordcloud = WordCloud(width=800, height=400, background_color='white', stopwords=None).generate(text)
+    
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.axis('off')
+    plt.show()
 
-def generate_wordcloud(dataframe, text_column):
+def generate_wordcloud_df(dataframe, text_column):
     """
     Gera e exibe uma nuvem de palavras a partir de uma coluna de texto
     no dataframe.
@@ -76,7 +89,7 @@ def show_distribution(dataframe, target_column):
         )
     plt.show()
 
-def plot_text_length_distribution(target_column, msg, bins=50, figsize=(10, 6), show_percentiles=(25, 50, 75)):
+def plot_text_length_distribution(df, col, msg, bins=50, figsize=(10, 6), show_percentiles=(25, 50, 75)):
     """
     Plota a distribuição dos comprimentos (número de caracteres) dos textos
     - bins: número de bins para o histograma
@@ -85,14 +98,14 @@ def plot_text_length_distribution(target_column, msg, bins=50, figsize=(10, 6), 
     """
 
     # estatísticas rápidas
-    mean = target_column.mean()
-    median = target_column.median()
-    std = target_column.std()
-    pcts = {p: int(target_column.quantile(p/100.0)) for p in show_percentiles}
+    mean = df[col].mean()
+    median = df[col].median()
+    std = df[col].std()
+    pcts = {p: int(df[col].quantile(p/100.0)) for p in show_percentiles}
 
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=figsize, gridspec_kw={"height_ratios": (4, 1)}, tight_layout=True)
 
-    axes[0].hist(target_column, bins=bins, color='tab:blue', alpha=0.75)
+    axes[0].hist(df[col], bins=bins, color='tab:blue', alpha=0.75)
     axes[0].set_title(f'Distribuição de {msg}')
     axes[0].set_xlabel(msg)
     axes[0].set_ylabel("Frequência")
@@ -106,14 +119,14 @@ def plot_text_length_distribution(target_column, msg, bins=50, figsize=(10, 6), 
     axes[0].legend()
 
     # boxplot compacto embaixo para outliers / dispersão
-    axes[1].boxplot(target_column, vert=False)
+    axes[1].boxplot(df[col], vert=False)
     axes[1].set_xlabel(msg)
     axes[1].set_yticks([])
 
     plt.show()
 
     # imprime resumo numérico
-    stats_msg = f"count={len(target_column)}, mean={mean:.1f}, median={median:.0f}, std={std:.1f}, min={target_column.min()}, max={target_column.max()}"
+    stats_msg = f"count={len(df[col])}, mean={mean:.1f}, median={median:.0f}, std={std:.1f}, min={df[col].min()}, max={df[col].max()}"
     pct_msg = "  ".join([f"{p}th={v}" for p, v in pcts.items()])
     print(stats_msg)
     print(pct_msg)
@@ -143,67 +156,124 @@ def check_duplicates_between_sets(dataframes=[], names=[]):
         duplicated = df[df.duplicated(keep=False)]
         print(f"Linhas duplicadas entre {name} {len(duplicated)}")
 
+def scatterplot(df, col1, col2):
 
-def find_and_save_outliers(dataframe, numeric_columns, method='iqr', output_dir='data/analysis'):
-    """
-    Detecta outliers em múltiplas colunas numéricas e salva relatório.
-    """
-    import os
-    os.makedirs(output_dir, exist_ok=True)
-    
-    all_outliers = {}
-    for col in numeric_columns:
-        if col in dataframe.columns:
-            outliers = od.get_outliers_by_method(dataframe[col], method=method)
-            all_outliers[col] = outliers
-            print(f"{col}: {len(outliers)} outliers detectados (método: {method})")
-    
-    # salvar índices de outliers de cada coluna
-    outlier_indices = set()
-    for col, outliers in all_outliers.items():
-        outlier_indices.update(outliers.index)
-    
-    outlier_rows = dataframe.loc[list(outlier_indices), :].copy()
-    outlier_rows.to_csv(f'{output_dir}/{method}_outliers.csv', index=False)
-    print(f"\nOutliers salvos em: {output_dir}/{method}_outliers.csv ({len(outlier_rows)} linhas)")
-    
-    return outlier_rows, all_outliers
+    plt.scatter(df[col1], df[col2])
+    plt.xlabel(col1)
+    plt.ylabel(col2)
+    plt.title(f"Scatter plot de {col1} vs {col2}")
+    plt.show()
+
+def estatisticas_univariadas(df, col):
+    print(f"Assimetria {col}: {df[col].skew()}")
+    print(f"Curtose {col}: {df[col].kurtosis()}")
+
+
+def corr_matrix(df, method='pearson'):
+    # Apenas colunas numéricas
+    corr = df.select_dtypes(include='number').corr(method=method)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Colormap mais brando
+    cax = ax.imshow(
+        corr,
+        cmap='coolwarm',
+        vmin=-1,
+        vmax=1
+    )
+
+    # Barra de cores
+    fig.colorbar(cax, ax=ax, fraction=0.046, pad=0.04)
+
+    # Ticks e labels
+    ax.set_xticks(np.arange(len(corr.columns)))
+    ax.set_yticks(np.arange(len(corr.columns)))
+
+    ax.set_xticklabels(corr.columns, rotation=90)
+    ax.set_yticklabels(corr.columns)
+
+    # Título
+    ax.set_title("Matriz de Correlação", pad=20)
+
+    # Anotar valores em cada célula
+    for i in range(len(corr.columns)):
+        for j in range(len(corr.columns)):
+            ax.text(
+                j, i,
+                f"{corr.iloc[i, j]:.2f}",
+                ha="center",
+                va="center",
+                color="black",
+                fontsize=9
+            )
+
+    plt.tight_layout()
+    plt.show()
+
+def semantic_similarity(df, col):
+    sentences = df[col]
+
+    model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+    embedding_imdb = model.encode(sentences)
+
+    # generate TSNE - 2D
+    X = list(embedding_imdb["text_lower_embedding"])
+    X_embedded = TSNE(n_components=2).fit_transform(X)
+    df_proj_embeddings = pd.DataFrame(X_embedded)
+    df_proj_embeddings = df_proj_embeddings.rename(columns={0:'x',1:'y'})
+    df_proj_embeddings['label'] = embedding_imdb["Category"]
+
+    # plot 
+    fig = px.scatter(df_proj_embeddings, x="x", y="y", color="label", width=600, height=400)
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=20, b=20),
+        paper_bgcolor="White",
+        plot_bgcolor="White",
+    )
+    fig.show()
+
+    # generate TSNE - 3D
+    tsne_3D = TSNE(n_components=3, random_state=0)
+    projections_3D = tsne_3D.fit_transform(X)
+    df_3D_proj_embeddings = pd.DataFrame(projections_3D)
+    df_3D_proj_embeddings = df_3D_proj_embeddings.rename(columns={0:'x',1:'y', 2:'z'})
+    df_3D_proj_embeddings['label'] = embedding_imdb["Category"]
+
+    # plot
+    fig = px.scatter_3d(
+        df_3D_proj_embeddings, x="x", y="y", z="z", color="label", width=600, height=400
+    )
+    fig.update_traces(marker_size=8)
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=20, b=20),
+        paper_bgcolor="White",
+        plot_bgcolor="White",
+    )
+    fig.show()
+
 if __name__ == "__main__":
     RANDOM_SEED = 42
-    # CARREGAR DATASETS
+# CARREGAR DATASETS
     df_train = pd.read_csv('data/raw/Train.csv')
     df_val = pd.read_csv('data/raw/Valid.csv')
     df_test = pd.read_csv('data/raw/Test.csv')
     
+
     # ANÁLISE ESTRUTURAL DO DATASET
     #check_duplicates_between_sets([df_train, df_val, df_test], ['Treino', 'Validação', 'Teste'])
     df_full = pd.concat([df_train, df_val, df_test]).reset_index(drop=True)
     
-    eda_summary(df_full)
+    #eda_summary(df_full)
 
-    #generate_wordcloud(df_full, 'text')
+    #generate_wordcloud_df(df_full, 'text')
     #plot_top_ngrams(df_full['text'].astype(str), 20, (1,1), "")
-
+    
     df_clean = remove_duplicates(df_full)
+
+    
     #eda_summary(df_clean)
-    df_clean = add_features(df_clean, input_column='text')
-    
-    
-    #show_distribution(df_clean, 'label')
-    #plot_text_length_distribution(df_clean['length'], msg='Número de caracteres')
-    #plot_text_length_distribution(df_clean['word_count'], msg='Contagem de Palavras')
-    #plot_text_length_distribution(df_clean['mean_word_length'], msg='Comprimento Médio das Palavras')
-
-    print("Assimetria comprimento: {}".format(df_clean['length'].skew())) 
-    print("Curtose comprimento: {}".format(df_clean['length'].kurtosis()))
-
-    print("Assimetria contagem de palavras: {}".format(df_clean['word_count'].skew())) 
-    print("Curtose contagemm de palavras: {}".format(df_clean['word_count'].kurtosis()))
-
-    print("Assimetria comprimento médio de palavras: {}".format(df_clean['mean_word_length'].skew())) 
-    print("Curtose comprimento médio de palavras: {}".format(df_clean['mean_word_length'].kurtosis()))
-
-    
+   
 
     #print(df_clean.nlargest(5,['mean_word_length']))
     #print(df_clean.nsmallest(5, ['mean_word_length']))
@@ -213,51 +283,106 @@ if __name__ == "__main__":
 
     #print(df_clean.nlargest(5,['word_count']))
     #print(df_clean.nsmallest(5, ['word_count']))
-    # PRÉ-PROCESSAMENTO BÁSICO
     
     
     #emojis = filter_text_with_emoji(df_clean['text'].astype(str))
     #print(f"Encontradas {len(emojis)} linhas com emojis.")
     
-    #Análise univariada
     
+    #ANÁLISE UNIVARIADA
+    
+    df_clean = add_features(df_clean, input_column='text')
+    
+    #show_distribution(df_clean, 'label')
 
-    #Separação dos conjuntos para evitar vazamento de dados
-    #X_train, X_test, y_train, y_test = train_test_split(df_clean['text'], df_clean['label'], test_size=0.2, random_state=RANDOM_SEED, stratify=df_clean['label'])
-    #X_val, X_test, y_val, y_test = train_test_split(X_test, y_test, test_size=0.5, random_state=RANDOM_SEED, stratify=y_test)
+    #plot_text_length_distribution(df_clean, 'length', msg='Número de caracteres')
+    #plot_text_length_distribution(df_clean,'word_count', msg='Contagem de Palavras')
+    #plot_text_length_distribution(df_clean,'mean_word_length', msg='Comprimento Médio das Palavras')
+    #estatisticas_univariadas(df_clean, 'length')
+    #estatisticas_univariadas(df_clean, 'word_count')
+    #estatisticas_univariadas(df_clean, 'mean_word_length')
+
     nlp = load_nlp()
-    corpus = df_clean['text'].astype(str)
+    #corpus = df_clean['text'].astype(str)
+    #lowercase = corpus.str.lower()
+    #nohtml = lowercase.apply(lambda x : remove_html(x))
+    #normalized = nohtml.apply(lambda x: normalize_whitespace(x))
+    #tokenized = normalized.apply(lambda x: tokenize(x, nlp=nlp))
+    #no_stopwords = tokenized.apply(lambda x: remove_stopwords(x))
+
+    #plot_top_ngrams(no_stopwords, ngram_range=(1,1), title="Top 10 Unigrams")
+    #plot_top_ngrams(no_stopwords, ngram_range=(2,2), title="Top 10 Bigrams")
+    #plot_top_ngrams(no_stopwords, ngram_range=(3,3), title="Top 10 Trigrams")
+
     
-
-
-    
-    lowercase = corpus.str.lower()
-    normalized = lowercase.apply(lambda x: normalize_whitespace(x))
-    tokenized = normalized.apply(lambda x: tokenize(x, nlp=nlp))
-    no_stopwords = tokenized.apply(lambda x: remove_stopwords(x))
-
-
     # DETECÇÃO DE OUTLIERS
    
     # Comparar métodos
-    print("\n=== Comparando métodos para 'length' ===")
-    comparison = od.compare_outlier_methods(df_clean['length'])
-    consensus_count = comparison['consensus'].sum()
-    print(f"Pontos acusados por 2+ métodos: {consensus_count}")
-    outlier_rows = df_clean[comparison['consensus']]
-    outlier_rows.to_csv('data/analysis/outliers_length.csv', index=False)
+    #print("\n=== Comparando métodos para 'length' ===")
+    #comparison = od.compare_outlier_methods(df_clean['length'])
+    #consensus_count = comparison['consensus'].sum()
+    #print(f"Pontos acusados por 2+ métodos: {consensus_count}")
+    #outlier_rows = df_clean[comparison['consensus']]
+    #outlier_rows.to_csv('data/analysis/outliers_length.csv', index=False)
     
-    print("\n=== Comparando métodos para 'word_count' ===")
-    comparison = od.compare_outlier_methods(df_clean['word_count'])
-    consensus_count = comparison['consensus'].sum()
-    print(f"Pontos acusados por 2+ métodos: {consensus_count}")
-    outlier_rows = df_clean[comparison['consensus']]
-    outlier_rows.to_csv('data/analysis/outliers_word_count.csv', index=False)
+    #print("\n=== Comparando métodos para 'word_count' ===")
+    #comparison = od.compare_outlier_methods(df_clean['word_count'])
+    #consensus_count = comparison['consensus'].sum()
+    #print(f"Pontos acusados por 2+ métodos: {consensus_count}")
+    #outlier_rows = df_clean[comparison['consensus']]
+    #outlier_rows.to_csv('data/analysis/outliers_word_count.csv', index=False)
+
+    #print("\n=== Comparando métodos para 'mean_word_length' ===")
+    #comparison = od.compare_outlier_methods(df_clean['mean_word_length'])
+    #consensus_count = comparison['consensus'].sum()
+    #print(f"Pontos acusados por 2+ métodos: {consensus_count}")
+    #outlier_rows = df_clean[comparison['consensus']]
+    #outlier_rows.to_csv('data/analysis/outliers_mean_word_length.csv', index=False)
+
+
+    #ANÁLISE BIVARIADA
+
+    #df_neg = df_clean[df_clean['label']==0]
+    #df_pos = df_clean[df_clean['label']==1]
+
+    #corpus_neg = df_neg['text'].astype(str)
+    #lowercase_neg = corpus_neg.str.lower()
+    #nohtml_neg = lowercase_neg.apply(lambda x : remove_html(x))
+    #normalized_neg = nohtml_neg.apply(lambda x: normalize_whitespace(x))
+    #tokenized_neg = normalized_neg.apply(lambda x: tokenize(x, nlp=nlp))
+    #no_stopwords_neg = tokenized_neg.apply(lambda x: remove_stopwords(x))
+
+    #plot_top_ngrams(no_stopwords_neg, ngram_range=(1,1), title="Top 10 Unigrams dos Negativos")
+    #plot_top_ngrams(no_stopwords_neg, ngram_range=(2,2), title="Top 10 Bigrams dos Negativos")
+    #plot_top_ngrams(no_stopwords_neg, ngram_range=(3,3), title="Top 10 Trigrams dos Negativos")
+
+    #corpus_pos = df_pos['text'].astype(str)
+    #lowercase_pos = corpus_pos.str.lower()
+    #nohtml_pos = lowercase_pos.apply(lambda x : remove_html(x))
+    #normalized_pos = nohtml_pos.apply(lambda x: normalize_whitespace(x))
+    #tokenized_pos = normalized_pos.apply(lambda x: tokenize(x, nlp=nlp))
+    #no_stopwords_pos = tokenized_pos.apply(lambda x: remove_stopwords(x))
+
+    #plot_top_ngrams(no_stopwords_pos, ngram_range=(1,1), title="Top 10 Unigrams dos Positivos")
+    #plot_top_ngrams(no_stopwords_pos, ngram_range=(2,2), title="Top 10 Bigrams dos Positivos")
+    #plot_top_ngrams(no_stopwords_pos, ngram_range=(3,3), title="Top 10 Trigrams dos Positivos")
+
+    #plot_text_length_distribution(df_neg,'length', msg="comprimento na classe 0")
+    #plot_text_length_distribution(df_neg,'word_count', msg="número de palavras na classe 0")
+    #plot_text_length_distribution(df_neg,'mean_word_length', msg="comprimento médio das palavras na classe 0")
 
     
+    #plot_text_length_distribution(df_pos,'length', msg="comprimento na classe 1")
+    #plot_text_length_distribution(df_pos,'word_count', msg="número de palavras na classe 1")
+    #plot_text_length_distribution(df_pos,'mean_word_length', msg="comprimento médio das palavras na classe 1")
 
-    nlp = load_nlp()
+    #scatterplot(df_clean, 'length', 'label')
+    #scatterplot(df_clean, 'word_count', 'label')
+    #scatterplot(df_clean, 'mean_word_length', 'label')
+    
+    #corr_matrix(df_clean.drop(columns=['text']))
 
-    plot_top_ngrams(no_stopwords, ngram_range=(1,1), title="Top 10 Unigrams")
-    plot_top_ngrams(no_stopwords, ngram_range=(2,2), title="Top 10 Bigrams")
-    plot_top_ngrams(no_stopwords, ngram_range=(3,3), title="Top 10 Trigrams")
+    #ANÁLISE MULTIVARIADA:
+    nlp = customize_stopwords(nlp)
+    df_clean['clean_text'] = df_clean['text'].apply(lambda x : clean_text_pipeline(nlp, x))
+    semantic_similarity(df_clean, 'text')

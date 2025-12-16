@@ -102,12 +102,31 @@ def lemmatize_text(text, nlp):
     lemmatized = ' '.join([token.lemma_ for token in doc])
     return lemmatized
 
+
+def customize_stopwords(nlp):
+    
+    negation_words = {'not', 'no', 'never', "n't", 'nothing', 'neither', 'nor', 'none'}
+    
+    nlp.Defaults.stop_words -= negation_words
+    
+    for word in negation_words:
+        nlp.vocab[word].is_stop = False
+    
+    return nlp
+
 def remove_stopwords(tokenized_text):
     """
     Mantém apenas palavras importantes
     """
     meaningful_words = [token.text for token in tokenized_text if not token.is_stop]
     return " ".join(meaningful_words)
+
+def remove_br(df, col):
+    """
+    Remove br
+    """
+    df[col] = df[col].str.replace(r"\bbr\b", "", regex=True).str.strip()
+    return df
 
 def build_symspell():
     sym_spell = SymSpell(max_dictionary_edit_distance=3, prefix_length=7)

@@ -162,29 +162,23 @@ def handle_typos(text, sym_spell):
     return " ".join(corrected_words)
 
 def clean_text_pipeline(nlp, text):
-    # 1. Remover HTML (BeautifulSoup é lento, regex é mais rápido para coisas simples, mas BS4 é mais seguro)
+
     text = BeautifulSoup(text, "html.parser").get_text()
     
-    # 2. Lowercase (essencial para reduzir dimensionalidade)
+
     text = text.lower()
     
-    # 3. Remover caracteres especiais MAS manter pontuação de sentimento (! ?) se desejar
-    # A sua regex original [^A-Za-z0-9\s] remove exclamação. 
-    # Para sentimento, às vezes '!' é útil. Se for usar TF-IDF simples, pode remover.
     text = re.sub(r'[^a-z0-9\s]', '', text) 
     
-    # 4. Remover espaços extras
+    
     text = re.sub(r'\s+', ' ', text).strip()
     
-    # 5. Processamento NLP (Tokenização + Lematização + Stopwords)
-    # Esta é a parte lenta. Se quiser só limpar "lixo", pule esta etapa.
     doc = nlp(text)
     
     cleaned_tokens = []
     for token in doc:
-        # Filtra stopwords e pontuação, mas mantém o que salvamos no customize_stopwords
         if not token.is_stop and not token.is_punct:
-            cleaned_tokens.append(token.lemma_) # Ou token.text se não quiser lematizar
+            cleaned_tokens.append(token.lemma_)
             
     return " ".join(cleaned_tokens)
 

@@ -2,7 +2,6 @@ import re
 import spacy
 from spacy.lang.en import English
 import torch
-import en_core_web_sm
 from transformers import BertTokenizer
 from bs4 import BeautifulSoup
 from symspellpy import SymSpell, Verbosity
@@ -32,7 +31,7 @@ def load_nlp():
     """
     Carrega o modelo spaCy para inglês
     """
-    nlp = en_core_web_sm.load()
+    nlp = spacy.load("en_core_web_sm")
     return nlp
 
 def tokenize(text, nlp):

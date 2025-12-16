@@ -1,25 +1,41 @@
 import pandas as pd
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
-from lime import lime_tabular
+from lime.lime_text import LimeTextExplainer
 import shap
 
 
 # Supondo dados já normalizados
-def GridSearchLinearRegression(X_train, y_train,param_grid, cv):
-    grid_search = GridSearchCV(LogisticRegression(random_state=42),param_grid,cv=cv, scoring="accuracy",n_jobs=1,verbose=1)
+def train_logistic_regression(X_train, y_train, param_grid):
+    # O lime precisa dessa estrutura para funcionar automaticamente
+    pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer()),
+        ('clf', LogisticRegression(random_state=42, max_iter=1000))
+    ])
+
+    print("Iniciando GridSearch...")
+    grid_search = GridSearchCV(
+        pipeline,
+        param_grid,
+        cv=5,
+        scoring='f1_weighted',  # F1 é melhor se houver desbalanceamento
+        n_jobs=-1,
+        verbose=1
+    )
     grid_search.fit(X_train, y_train)
+    print("Melhores parâmetros:", grid_search.best_params_)
+    return grid_search.best_estimator_
 
-    print("Melhores parametros encontrados")
-    print(grid_search.best_params_)
+def lime_explainer(pipeline, instance,class_names):
+    explainer = LimeTextExplainer(class_names=class_names)
+    exp = explainer.explain_instance(
+        text_instance,
+        pipeline.predict_proba,
+        num_features=10
+    )
 
-    best_model = grid_search.best_estimator_
-    return best_model
-
-def createLimeExplainer(X_train):
-    explainer = lime_tabular.LimeTabularExplainer()
-    X_train.values,
-    mode='classification',
-    feature_names=X_train.columns,
-    class_names=['0','1'],
-    discretize_continuous=False
+    return exp

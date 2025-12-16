@@ -4,10 +4,26 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, train_test_split
 from lime.lime_text import LimeTextExplainer
 import shap
 
+
+def prepare_data_splits(df):
+    X = df['text']
+    y = df['label']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
+
+    print(f"Dados prontos!")
+    print(f"Treino (será usado no CV): {len(X_train)} amostras")
+    print(f"Teste (Cofre fechado): {len(X_test)} amostras")
+    return X_train, X_test, y_train, y_test
 
 # Supondo dados já normalizados
 def train_logistic_regression(X_train, y_train, param_grid):

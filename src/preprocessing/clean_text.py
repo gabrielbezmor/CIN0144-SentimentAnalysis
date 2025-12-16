@@ -9,6 +9,7 @@ import string
 import pkg_resources
 from emot import EMOTICONS_EMO
 from emot import UNICODE_EMOJI
+from clean_dataset import combine_data, remove_duplicates
 
 """
 Contém funções úteis para pré-processamento de texto.
@@ -160,27 +161,34 @@ def handle_typos(text, sym_spell):
 
     return " ".join(corrected_words)
 
-def clean_text_pipeline(nlp, text):
+def generate_preprocessed_dataframes(test_path, train_path, val_path):
+  df = combine_data(train_path, test_path, val_path)
+  print("1. Removendo Duplicadas")
+  df_noduplicates = remove_duplicates(df)
+  dataframes  = {}
+  dataframes["raw"] = df_noduplicates.copy()
 
-    text = BeautifulSoup(text, "html.parser").get_text()
-    
+  print("2. Removendo HTML")
+  df_no_html = dataframes["raw"].copy()
+  df_no_html['text'] = df_no_html['text'].apply(remove_html)
+  dataframes["no_html"] = df_no_html
 
-    text = text.lower()
-    
-    text = re.sub(r'[^a-z0-9\s]', '', text) 
-    
-    
-    text = re.sub(r'\s+', ' ', text).strip()
-    
-    doc = nlp(text)
-    
-    cleaned_tokens = []
-    for token in doc:
-        if not token.is_stop and not token.is_punct:
-            cleaned_tokens.append(token.lemma_)
-            
-    return " ".join(cleaned_tokens)
+  print("3. Normalizando")
+  df_normalized = dataframes["no_html"].copy()
+  df_normalized['text'] = df_normalized['text'].apply(normalize_whitespace)
+  dataframes["normalized"] = df_normalized
 
+  print("4. Corrigindo Typos")
+  df_corrected = dataframes["normalized"].copy()
+  df_corrected['text'] = df_corrected['text'].apply(lambda x: handle_typos(x, sym_spell))
+  dataframes["corrected"] = df_corrected
+
+  print("5. Aplicando Lematização")
+  df_nlp = dataframes["corrected"].copy()
+  df_nlp['text'] = df_nlp['text'].apply(lambda x: lemmatize_text(x, nlp))
+  dataframes["lemmatized"] = df_nlp
+
+  return dataframes
 
 if __name__ == "__main__":
     text =     """

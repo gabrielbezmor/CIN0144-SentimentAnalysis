@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression

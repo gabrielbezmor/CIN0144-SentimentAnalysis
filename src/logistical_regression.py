@@ -33,7 +33,7 @@ def train_logistic_regression(X_train, y_train, param_grid):
 def lime_explainer(pipeline, instance,class_names):
     explainer = LimeTextExplainer(class_names=class_names)
     exp = explainer.explain_instance(
-        text_instance,
+        instance,
         pipeline.predict_proba,
         num_features=10
     )

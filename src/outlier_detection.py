@@ -23,7 +23,7 @@ def zscore_outliers(series, threshold=3):
     outliers = series.dropna().iloc[mask]
     return outliers.sort_values(), mask, z_scores
 
-def iqr_outliers(series, multiplier=1.5):
+def iqr_outliers(series, multiplier=3):
     """
     Interquartile Range (IQR) method: padrão em boxplots.
     - multiplier=1.5: outliers padrão (default Tukey)

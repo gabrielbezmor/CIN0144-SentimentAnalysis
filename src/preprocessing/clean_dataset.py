@@ -8,4 +8,4 @@ def remove_duplicates(dataframe):
     Remove linhas duplicadas do dataframe.
     Retorna o dataframe sem duplicatas.
     """
-    return dataframe.drop_duplicates().reset_index(drop=True)
+    return dataframe.drop_duplicates(keep="first").reset_index(drop=True)

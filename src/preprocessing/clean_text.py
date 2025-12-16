@@ -102,12 +102,31 @@ def lemmatize_text(text, nlp):
     lemmatized = ' '.join([token.lemma_ for token in doc])
     return lemmatized
 
+
+def customize_stopwords(nlp):
+    
+    negation_words = {'not', 'no', 'never', "n't", 'nothing', 'neither', 'nor', 'none'}
+    
+    nlp.Defaults.stop_words -= negation_words
+    
+    for word in negation_words:
+        nlp.vocab[word].is_stop = False
+    
+    return nlp
+
 def remove_stopwords(tokenized_text):
     """
     Mantém apenas palavras importantes
     """
     meaningful_words = [token.text for token in tokenized_text if not token.is_stop]
     return " ".join(meaningful_words)
+
+def remove_br(df, col):
+    """
+    Remove br
+    """
+    df[col] = df[col].str.replace(r"\bbr\b", "", regex=True).str.strip()
+    return df
 
 def build_symspell():
     sym_spell = SymSpell(max_dictionary_edit_distance=3, prefix_length=7)
@@ -142,6 +161,32 @@ def handle_typos(text, sym_spell):
 
     return " ".join(corrected_words)
 
+def clean_text_pipeline(nlp, text):
+    # 1. Remover HTML (BeautifulSoup é lento, regex é mais rápido para coisas simples, mas BS4 é mais seguro)
+    text = BeautifulSoup(text, "html.parser").get_text()
+    
+    # 2. Lowercase (essencial para reduzir dimensionalidade)
+    text = text.lower()
+    
+    # 3. Remover caracteres especiais MAS manter pontuação de sentimento (! ?) se desejar
+    # A sua regex original [^A-Za-z0-9\s] remove exclamação. 
+    # Para sentimento, às vezes '!' é útil. Se for usar TF-IDF simples, pode remover.
+    text = re.sub(r'[^a-z0-9\s]', '', text) 
+    
+    # 4. Remover espaços extras
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # 5. Processamento NLP (Tokenização + Lematização + Stopwords)
+    # Esta é a parte lenta. Se quiser só limpar "lixo", pule esta etapa.
+    doc = nlp(text)
+    
+    cleaned_tokens = []
+    for token in doc:
+        # Filtra stopwords e pontuação, mas mantém o que salvamos no customize_stopwords
+        if not token.is_stop and not token.is_punct:
+            cleaned_tokens.append(token.lemma_) # Ou token.text se não quiser lematizar
+            
+    return " ".join(cleaned_tokens)
 
 
 if __name__ == "__main__":

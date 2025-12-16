@@ -5,11 +5,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV, train_test_split
-from lime.lime_text import LimeTextExplainer
 from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 import shap
 from preprocessing.clean_text import generate_preprocessed_dataframes
 import os
+import graphicFunctions
 
 
 def prepare_data_splits(df):
@@ -49,16 +49,6 @@ def train_logistic_regression(X_train, y_train, param_grid,):
     print("Melhores parâmetros:", grid_search.best_params_)
     return grid_search.best_estimator_
 
-def lime_explainer(pipeline, instance,class_names):
-    explainer = LimeTextExplainer(class_names=class_names)
-    exp = explainer.explain_instance(
-        instance,
-        pipeline.predict_proba,
-        num_features=10
-    )
-
-    return exp
-
 # Geração de dataframes com diferentes niveis de preprocessamento
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -70,7 +60,7 @@ dataframes = generate_preprocessed_dataframes(test_path, train_path, val_path)
 
 
 # =======================================================================================
-# FASE 1: COMPARAÇÃO DE PRÉ-PROCESSAMENTO (RÁPIDO, SEM TUNAGEM)
+# FASE 1: COMPARAÇÃO DE PRÉ-PROCESSAMENTO (SEM TUNAGEM)
 # Objetivo: Gerar dados para comparação de pré-processamentos e escolher o melhor dataset
 # ========================================================================================
 results_phase1 = {}
@@ -148,3 +138,17 @@ print(f"Acurácia (Teste): {results[best_df_name]['accuracy']:.4f}")
 print(f"ROC-AUC Score: {roc_auc_score(y_test, y_proba):.4f}")
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred))
+
+
+#Plotar gráfico da acurácia x Nível de preprocessamento
+print("Gerando gráfico comparativo de pré-processamento...")
+graphicFunctions.plot_benchmark_results(results)
+
+print(f"Gerando Top Keywords para o campeão: {best_df_name}")
+graphicFunctions.show_top_keywords(results, best_df_name)
+
+print(f"Gerando explicação LIME para amostras do: {best_df_name}")
+graphicFunctions.explain_instance_lime(results, best_df_name, index_test_set=10, num_features=15)
+graphicFunctions.explain_instance_lime(results, best_df_name, index_test_set=50, num_features=15)
+graphicFunctions.explain_instance_lime(results, best_df_name, index_test_set=100, num_features=15)
+graphicFunctions.explain_instance_lime(results, best_df_name, index_test_set=200, num_features=15)

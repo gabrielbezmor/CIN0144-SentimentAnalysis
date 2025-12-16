@@ -1,1 +1,1 @@
-English comments dataset: https://www.kaggle.com/datasets/abdelmalekeladjelet/sentiment-analysis-dataset?resource=download
+IMDb dataset: https://www.kaggle.com/datasets/columbine/imdb-dataset-sentiment-analysis-in-csv-format

@@ -104,3 +104,72 @@ def show_top_keywords(results_dict, model_name, n=10):
 
     plt.tight_layout()
     plt.show()
+
+
+#FUNÇÕES DO NAIVE BAYES
+def mostrar_palavras_reais_do_sentimento(vectorizer, clf, n=15):
+
+    feature_names = vectorizer.get_feature_names_out()
+
+
+    neg_prob = clf.feature_log_prob_[0] 
+    pos_prob = clf.feature_log_prob_[1] 
+
+
+    diferenca = pos_prob - neg_prob
+
+
+    top_pos_indices = np.argsort(diferenca)[-n:][::-1]
+
+    top_neg_indices = np.argsort(diferenca)[:n]
+
+    print(f"--- Top {n} Palavras que indicam POSITIVO (O que faz o modelo amar) ---")
+    for i in top_pos_indices:
+        print(f"{feature_names[i]}: {diferenca[i]:.4f}")
+
+    print(f"\n--- Top {n} Palavras que indicam NEGATIVO (O que faz o modelo odiar) ---")
+    for i in top_neg_indices:
+        print(f"{feature_names[i]}: {diferenca[i]:.4f}")
+
+def plot_palavras_importantes(vectorizer, clf, n=20):
+    """
+    Plota um gráfico de barras divergentes com as palavras mais importantes
+    para Positivo e Negativo no Naive Bayes.
+    """
+
+    feature_names = vectorizer.get_feature_names_out()
+    neg_prob = clf.feature_log_prob_[0]
+    pos_prob = clf.feature_log_prob_[1]
+
+
+    diferenca = pos_prob - neg_prob
+
+
+    df_features = pd.DataFrame({
+        'feature': feature_names,
+        'importance': diferenca
+    })
+
+
+    df_pos = df_features.nlargest(n, 'importance')
+    df_neg = df_features.nsmallest(n, 'importance')
+
+
+    df_plot = pd.concat([df_neg.sort_values('importance', ascending=False), 
+                            df_pos.sort_values('importance', ascending=True)])
+
+
+    plt.figure(figsize=(12, 10))
+
+
+    colors = ['red' if x < 0 else 'green' for x in df_plot['importance']]
+
+    plt.barh(df_plot['feature'], df_plot['importance'], color=colors, alpha=0.7)
+
+
+    plt.title(f'Top {n} Palavras mais Determinantes por Sentimento (Naive Bayes)', fontsize=15)
+    plt.xlabel('Importância (Log-Odds Ratio)', fontsize=12)
+    plt.axvline(x=0, color='black', linestyle='--', linewidth=0.8) 
+    plt.grid(axis='x', linestyle=':', alpha=0.5)
+    plt.tight_layout()
+    plt.show()

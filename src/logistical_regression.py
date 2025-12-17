@@ -108,6 +108,7 @@ pipeline_final = Pipeline([
 
 param_grid = {
     'tfidf__ngram_range': [(1, 1), (1, 2)],
+    'clf__solver': ['liblinear'],
     'clf__C': [0.1, 1, 10, 100],
     'clf__penalty': ['l1', 'l2']
 }
